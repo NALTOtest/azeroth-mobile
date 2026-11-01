@@ -1,0 +1,48 @@
+name: Build Emberfall 3D
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Unzip the newest Emberfall upload
+        run: |
+          # Phones often save a second download as "EmberfallSurvivors (1).zip",
+          # so use whichever Emberfall zip was uploaded most recently.
+          f=$(git log --name-only --format= -- 'Emberfall*.zip' | grep -m1 . || true)
+          if [ -z "$f" ] || [ ! -f "$f" ]; then f=$(ls -t Emberfall*.zip | head -1); fi
+          echo "Using: $f"
+          rm -rf ember-survivors
+          unzip -o "$f"
+          if grep -q "Choose your class" ember-survivors/app/src/main/assets/index.html; then echo "3D version found"; else echo "::warning::This zip is the old 2-class version"; fi
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Check Android SDK
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        working-directory: ember-survivors
+        run: gradle --no-daemon assembleRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Emberfall-3D-apk
+          path: ember-survivors/app/build/outputs/apk/release/*.apk
