@@ -1,0 +1,48 @@
+name: Publish Emberfall web
+
+# Puts the game online as a normal web page (GitHub Pages) so friends on a PC can play
+# and join your online co-op room from a browser. Runs every time you upload a new Emberfall zip.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Unzip the newest Emberfall upload
+        run: |
+          f=$(git log --name-only --format= -- 'Emberfall*.zip' | grep -m1 . || true)
+          if [ -z "$f" ] || [ ! -f "$f" ]; then f=$(ls -t Emberfall*.zip | head -1); fi
+          echo "Using: $f"
+          rm -rf ember-survivors site
+          unzip -o "$f"
+          mkdir site
+          cp -r ember-survivors/app/src/main/assets/. site/
+          touch site/.nojekyll
+          ls -la site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
